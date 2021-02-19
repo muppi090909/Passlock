@@ -1,17 +1,27 @@
 from flask import Flask, request, render_template
+from flask_mongoengine import MongoEngine
 import hashlib
-import json
-import os
-auth = False
+
 app = Flask(__name__)
-vault = {}
+app.config['MONGODB_SETTINGS'] = {
+    'db': 'passlock',
+    'host': 'localhost',
+    'port': 27017
+}
+db = MongoEngine()
+db.init_app(app)
 
 
-def init(storage):
-    global vault
-    f = open(storage, "r")
-    vault = json.loads(f.read())
-    f.close()
+class Users(db.Document):
+    name = db.StringField()
+    password = db.StringField()
+
+
+class credentials(db.Document):
+    user = db.StringField()
+    app_name = db.StringField()
+    login = db.StringField()
+    password = db.StringField()
 
 
 @app.route('/')
@@ -21,12 +31,13 @@ def home():
 
 @app.route('/login', methods=['POST'])
 def login():
-    master_pass = request.form['passwd']
-    hashed_pass = hashlib.sha256(master_pass.encode()).hexdigest()
-    if (hashed_pass == vault.get("master")):
+    pass_entry = request.form['passwd']
+    pass_hash = hashlib.sha256(pass_entry.encode()).hexdigest()
+    user = Users.objects(name=request.form['user']).first()
+    if user and user['password'] == pass_hash:
         return render_template('menu.html')
     else:
-        return render_template('error.html', message='Invalid Username or password')
+        return render_template('login.html')
 
 
 @app.route('/menu', methods=['POST'])
@@ -45,12 +56,13 @@ def menu():
 
 @app.route('/read', methods=['POST'])
 def read():
-    app = request.form['app']
-    if (app in vault.keys()):
+    entry = credentials.objects(
+        user='admin', app_name=request.form['app']).first()
+    if entry:
         result = {}
-        result['application'] = app
-        result['username'] = vault.get(app).get('username')
-        result['password'] = vault.get(app).get('password')
+        result['application'] = entry.app_name
+        result['username'] = entry.login
+        result['password'] = entry.password
         return render_template('success.html', result=result)
     else:
         return render_template('error.html', message='Application does not exist')
@@ -58,42 +70,43 @@ def read():
 
 @app.route('/write', methods=['POST'])
 def write():
-    storage = os.path.join(app.root_path, "resources/storage.json")
-    f = open(storage, "w")
-    app_name = request.form['app']
-    new_login = request.form['username']
-    new_passwd = request.form['password']
-    entry = {}
-    entry["username"] = new_login
-    entry["password"] = new_passwd
-    vault[app_name] = entry
-    f.write(json.dumps(vault))
-    f.close()
-    return render_template('success.html', result=entry)
+    entry = credentials.objects(user='admin', app_name=request.form['app']).first()
+    if entry:
+        entry.update(user='admin', app_name=request.form['app'], 
+                    login=request.form['username'], password=request.form['password'])
+    else:
+        entry = credentials(user='admin', app_name=request.form['app'], 
+                    login=request.form['username'], password=request.form['password'])
+        entry.save()
+
+    result = {}
+    result['application'] = request.form['app']
+    result['username'] = request.form['username']
+    result['password'] = request.form['password']
+    return render_template('success.html', result=result)
 
 
 @app.route('/update', methods=['POST'])
 def update():
-    old = request.form['old']
-    new = request.form['new']
-    confirm = request.form['confirm']
+    old_pass = request.form['old']
+    new_pass = request.form['new']
+    confirm_pass = request.form['confirm']
+    old_hash = hashlib.sha256(old_pass.encode()).hexdigest()
+    new_hash = hashlib.sha256(new_pass.encode()).hexdigest()
 
-    if (confirm != new):
-        return render_template('error.html', message='Passwords do not match')
-    hashold = hashlib.sha256(old.encode()).hexdigest()
-    if (hashold != vault.get('master')):
+    user = Users.objects(name='admin').first()
+    if user and user['password'] == old_hash:
+        if new_pass == confirm_pass:
+            user.update(password=new_hash)
+            result = {}
+            result['username'] = 'admin'
+            result['password'] = new_pass
+            return render_template('success.html', result=result)
+        else:
+            return render_template('error.html', message='Passwords do not match')
+    else:
         return render_template('error.html', message='Invalid old password')
 
-    hashnew = hashlib.sha256(new.encode()).hexdigest()
-    vault['master'] = hashnew
-    storage = os.path.join(app.root_path, "resources/storage.json")
-    f = open(storage, 'w')
-    f.write(json.dumps(vault))
-    f.close()  
-    result = {}
-    result['old_password'] = old
-    result['new_password'] = new
-    return render_template('success.html', result=result)
 
 @app.route('/startover', methods=['POST'])
 def startover():
@@ -101,6 +114,4 @@ def startover():
 
 
 if __name__ == '__main__':
-    storage = os.path.join(app.root_path, "resources/storage.json")
-    init(storage)
     app.run('0.0.0.0', 5000)
