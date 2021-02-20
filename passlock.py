@@ -1,8 +1,9 @@
-from flask import Flask, request, render_template
+from flask import Flask, request, render_template, session
 from flask_mongoengine import MongoEngine
 import hashlib
 
 app = Flask(__name__)
+app.secret_key = '60308ba9bddf0845786b0824'
 app.config['MONGODB_SETTINGS'] = {
     'db': 'passlock',
     'host': 'localhost',
@@ -26,7 +27,7 @@ class credentials(db.Document):
 
 @app.route('/')
 def home():
-    return render_template('login.html')
+    return render_template('login.html', message='Login to proceed')
 
 
 @app.route('/login', methods=['POST'])
@@ -35,29 +36,38 @@ def login():
     pass_hash = hashlib.sha256(pass_entry.encode()).hexdigest()
     user = Users.objects(name=request.form['user']).first()
     if user and user['password'] == pass_hash:
-        return render_template('menu.html')
+        session['user'] = request.form['user']
+        return render_template('menu.html', username=session['user'])
     else:
-        return render_template('login.html')
+        return render_template('login.html', message='Invalid username or password')
 
 
 @app.route('/menu', methods=['POST'])
 def menu():
+    if not 'user' in session:
+        return render_template('login.html', message='Login to proceed')
+
     choice = request.form['menu']
-    print(choice)
-    if (choice == 'read'):
+    if choice == 'read':
         return render_template('read.html')
-    elif (choice == 'write'):
+    elif choice == 'write':
         return render_template('write.html')
-    elif (choice == 'update'):
+    elif choice == 'update':
         return render_template('update.html')
+    elif choice == 'logout':
+        session.pop('user', None)
+        return render_template('login.html')
     else:
         return render_template('error.html', meesage='Invalid choice')
 
 
 @app.route('/read', methods=['POST'])
 def read():
+    if not 'user' in session:
+        return render_template('login.html', message='Login to proceed')
+
     entry = credentials.objects(
-        user='admin', app_name=request.form['app']).first()
+        user=session['user'], app_name=request.form['app']).first()
     if entry:
         result = {}
         result['application'] = entry.app_name
@@ -70,38 +80,38 @@ def read():
 
 @app.route('/write', methods=['POST'])
 def write():
-    entry = credentials.objects(user='admin', app_name=request.form['app']).first()
-    if entry:
-        entry.update(user='admin', app_name=request.form['app'], 
-                    login=request.form['username'], password=request.form['password'])
-    else:
-        entry = credentials(user='admin', app_name=request.form['app'], 
-                    login=request.form['username'], password=request.form['password'])
-        entry.save()
+    if not 'user' in session:
+        return render_template('login.html', message='Login to proceed')
 
-    result = {}
-    result['application'] = request.form['app']
-    result['username'] = request.form['username']
-    result['password'] = request.form['password']
-    return render_template('success.html', result=result)
+    entry = credentials.objects(
+        user=session['user'], app_name=request.form['app']).first()
+    if entry:
+        entry.update(user=session['user'], app_name=request.form['app'],
+                     login=request.form['username'], password=request.form['password'])
+    else:
+        entry = credentials(user=session['user'], app_name=request.form['app'],
+                            login=request.form['username'], password=request.form['password'])
+        entry.save()
+    return render_template('noresult.html')
 
 
 @app.route('/update', methods=['POST'])
 def update():
+
+    if not 'user' in session:
+        return render_template('login.html', message='Login to proceed')
+
     old_pass = request.form['old']
     new_pass = request.form['new']
     confirm_pass = request.form['confirm']
     old_hash = hashlib.sha256(old_pass.encode()).hexdigest()
     new_hash = hashlib.sha256(new_pass.encode()).hexdigest()
 
-    user = Users.objects(name='admin').first()
+    user = Users.objects(name=session['user']).first()
     if user and user['password'] == old_hash:
         if new_pass == confirm_pass:
             user.update(password=new_hash)
-            result = {}
-            result['username'] = 'admin'
-            result['password'] = new_pass
-            return render_template('success.html', result=result)
+            return render_template('noresult.html')
         else:
             return render_template('error.html', message='Passwords do not match')
     else:
@@ -110,7 +120,7 @@ def update():
 
 @app.route('/startover', methods=['POST'])
 def startover():
-    return render_template('menu.html')
+    return render_template('menu.html', username=session['user'])
 
 
 if __name__ == '__main__':

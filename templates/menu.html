@@ -13,6 +13,11 @@
       <option value="read">Retrieve pasword</option>
       <option value="write">Create/Update password</option>
       <option value="update">Update master password</option>
+      {% if username == "admin": %}
+      <option value="add">Add new user</option>
+      <option value="delete">Delete existing user</option>
+      {% endif %}
+      <option value="logout">Logout</option>
     </select>
     <input type="submit" id="submit" value="Submit">
 </body>
