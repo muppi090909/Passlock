@@ -54,6 +54,10 @@ def menu():
         return render_template('write.html')
     elif choice == 'update':
         return render_template('update.html')
+    elif choice == 'add':
+        return render_template('adduser.html')
+    elif choice == 'delete':
+        return render_template('deleteuser.html')
     elif choice == 'logout':
         session.pop('user', None)
         return render_template('login.html')
@@ -61,6 +65,34 @@ def menu():
         return render_template('error.html', meesage='Invalid choice')
 
 
+@app.route('/add_user', methods=['POST'])
+def add_user():
+    if 'admin' == session['user']:
+        pass_entry = request.form['password']
+        pass_hash = hashlib.sha256(pass_entry.encode()).hexdigest()
+        
+        entry = Users.objects(name=request.form['username']).first()
+        if entry:
+            entry.update(name=request.form['username'], password=pass_hash)
+            return render_template('success.html', action='User update')
+        else:
+            entry = Users(name=request.form['username'], password=pass_hash)
+            entry.save()
+            return render_template('success.html', action='User addition')
+    else:
+        return render_template('login.html', message='login as admin to continue')
+
+@app.route('/delete_user', methods=['POST'])
+def delete_user():
+    if 'admin' == session['user']:
+        user = Users.objects(name=request.form['username'])
+        if user:
+            user.delete()
+            return render_template('success.html', action='user deletion')
+        else:
+            return render_template('error.html', message='User not found')
+    else:
+        return render_template('login.html', message='login as admin to continue')
 @app.route('/read', methods=['POST'])
 def read():
     if not 'user' in session:
@@ -92,7 +124,7 @@ def write():
         entry = credentials(user=session['user'], app_name=request.form['app'],
                             login=request.form['username'], password=request.form['password'])
         entry.save()
-    return render_template('noresult.html')
+    return render_template('success.html', 'Application addition')
 
 
 @app.route('/update', methods=['POST'])
@@ -111,7 +143,7 @@ def update():
     if user and user['password'] == old_hash:
         if new_pass == confirm_pass:
             user.update(password=new_hash)
-            return render_template('noresult.html')
+            return render_template('success.html', action='Password update')
         else:
             return render_template('error.html', message='Passwords do not match')
     else:
