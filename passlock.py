@@ -105,7 +105,7 @@ def read():
         result['application'] = entry.app_name
         result['username'] = entry.login
         result['password'] = entry.password
-        return render_template('success.html', result=result)
+        return render_template('result.html', result=result)
     else:
         return render_template('error.html', message='Application does not exist')
 

@@ -1,0 +1,21 @@
+<html>
+<title>
+    Passlock | Result
+</title>
+
+<body>
+    <h1>Result</h1>
+    <form action="http://192.168.1.11:5000/startover" method="POST">
+        <table border="1">
+            {% for key, value in result.items() %}
+            <tr>
+                <td>{{key}}</td>
+                <td>{{value}}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        <input type="submit" id="submit" value="Start Over">
+    </form>
+</body>
+
+</html>
