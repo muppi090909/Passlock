@@ -124,7 +124,7 @@ def write():
         entry = credentials(user=session['user'], app_name=request.form['app'],
                             login=request.form['username'], password=request.form['password'])
         entry.save()
-    return render_template('success.html', 'Application addition')
+    return render_template('success.html', action='Application addition')
 
 
 @app.route('/update', methods=['POST'])
